@@ -1,0 +1,41 @@
+stages:
+  - build jar
+  - build and push docker image
+  - deploy
+
+build:
+  image: maven:3.6.2-jdk-11-slim
+  stage: build jar
+  script:
+    - mvn clean install -Dspring.profiles.active=dev && mvn -DAWS_ACCESS_KEY=$AWS_ACCESS_KEY -DAWS_BUCKET_NAME=$AWS_BUCKET_NAME -DAWS_ENDPOINT=$AWS_ENDPOINT -DAWS_SECRET_KEY=$AWS_SECRET_KEY -DDATABASE_HOST=$DATABASE_HOST -DDATABASE_NAME=$DATABASE_NAME -DDATABASE_PASSWORD=$DATABASE_PASSWORD -DDATABASE_PORT=$DATABASE_PORT -DDATABASE_USERNAME=$DATABASE_USERNAME -DEMAIL=$EMAIL -DEMAIL_PASSWORD=$EMAIL_PASSWORD -DSERVER_PORT=$SERVER_PORT -DTOKEN_EXPIRED=$TOKEN_EXPIRED -DTOKEN_SECRET=$TOKEN_SECRET && mvn package -B -e -Dspring.profiles.active=dev 
+  artifacts:
+    paths:
+      - target/*.jar
+  only:
+    - main
+docker build:
+  services:
+    - docker:19.03.13-dind
+  image: docker:19.03.13-dind
+  stage: build and push docker image
+  script:
+    - docker build --build-arg SPRING_ACTIVE_PROFILE=dev -t $DOCKER_REPO:latest .
+    - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD docker.io
+    - docker push $DOCKER_REPO:latest
+  only:
+    - main
+deploy:
+  image: ubuntu:latest
+  stage: deploy
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+  script:
+    - pwd
+    - ssh ubuntu@$SSH_SERVER_IP "docker login -u $DOCKER_USER -p $DOCKER_PASSWORD docker.io; docker stop $APP_NAME; docker system prune -a -f; docker pull $DOCKER_REPO:latest; docker-compose up -d; docker logout"
+  only:
+    - main

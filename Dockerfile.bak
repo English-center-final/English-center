@@ -1,0 +1,6 @@
+FROM openjdk:11
+LABEL maintainer="nhathao00852@gmail.com" version="1.0" description="Capstone project - DHKTPM14 - IUH"
+EXPOSE 8080
+ARG JAR_FILE=target/*.jar
+COPY  ${JAR_FILE} trungtamtienganh-0.0.1-SNAPSHOT.jar
+CMD ["java", "-jar", "trungtamtienganh-0.0.1-SNAPSHOT.jar"]
